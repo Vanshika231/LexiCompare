@@ -3,6 +3,8 @@ const express = require("express");
 const cors = require("cors");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/auth.routes");
+const documentRoutes = require("./routes/document.routes");
+const queryRoutes = require("./routes/query.routes");
 
 const app = express();
 
@@ -26,6 +28,8 @@ app.use("/api/auth", authRoutes);
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
+app.use("/api/documents", documentRoutes);
+app.use("/api/query", queryRoutes); 
 
 
 

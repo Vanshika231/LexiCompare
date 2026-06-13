@@ -55,11 +55,7 @@ export default function DashboardPage() {
               <div
                 key={doc._id}
                 className={`doc-row ${doc.status !== "ready" ? "disabled" : ""}`}
-                onClick={() => {
-                  if (doc.status === "ready") {
-                    navigate(`/query/${doc._id}`);
-                  }
-                }}
+                onClick={() => navigate(`/query/${doc._id}`)}
               >
                 <span className="doc-icon">📄</span>
 

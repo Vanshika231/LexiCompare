@@ -1,6 +1,5 @@
 const Document = require("../models/Document.model");
 const { indexDocument } = require("./rag.service");
-
 const saveDocuments = async (files, userId) => {
   const docs = files.map((file) => ({
     name: file.originalname,
@@ -11,17 +10,31 @@ const saveDocuments = async (files, userId) => {
     status: "uploaded",
   }));
 
-  return Document.insertMany(docs);
+  // Save documents
+  const saved = await Document.insertMany(docs);
+
+  // Index each document and update status
   await Promise.all(
-  saved.map(async (doc) => {
-    try {
-      await indexDocument(doc._id.toString(), doc.filePath);
-      await Document.findByIdAndUpdate(doc._id, { status: "ready" });
-    } catch {
-      await Document.findByIdAndUpdate(doc._id, { status: "failed" });
-    }
-  })
-);
+    saved.map(async (doc) => {
+      try {
+        await indexDocument(doc._id.toString(), doc.filePath);
+
+        await Document.findByIdAndUpdate(doc._id, {
+          status: "ready",
+        });
+      } catch (err) {
+  console.error(`Failed to index ${doc.originalName}:`, err.message);
+
+  await Document.findByIdAndUpdate(doc._id, {
+    status: "failed",
+  });
+}
+    })
+  );
+
+  return await Document.find({
+    _id: { $in: saved.map((d) => d._id) },
+  });
 };
 
 const getUserDocuments = async (userId) => {

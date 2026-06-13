@@ -38,7 +38,7 @@ const createQuery = async (documentId, question, userId) => {
 
   // 7. Save query + answer in DB
   const query = await Query.create({
-    documentId,
+    document: documentId,
     question: cleanQuestion,
     answer,
     askedBy: userId,
@@ -56,7 +56,7 @@ const getQueriesByDocument = async (documentId, userId) => {
   await getUserDocumentById(documentId, userId);
 
   // Fetch query history
-  return Query.find({ documentId, askedBy: userId }).sort({
+  return Query.find({  document: documentId, askedBy: userId }).sort({
     createdAt: -1,
   });
 };

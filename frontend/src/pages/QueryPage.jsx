@@ -19,7 +19,7 @@ export default function QueryPage() {
       try {
         const [docRes, queryRes] = await Promise.all([
           api.get(`/documents/${docId}`),
-          api.get(`/queries/${docId}`), // ✅ FIXED
+          api.get(`/query/${docId}`), 
         ]);
 
         setDoc(docRes.data.document);
@@ -51,7 +51,7 @@ export default function QueryPage() {
     setQuestion("");
 
     try {
-      const { data } = await api.post("/queries", {
+      const { data } = await api.post("/query", {
         documentId: docId,
         question: q,
       });

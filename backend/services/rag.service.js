@@ -1,6 +1,5 @@
 const fs = require("fs/promises");
 const pdfParse = require("pdf-parse");
-
 // In-memory store: { documentId: [chunk, chunk, ...] }
 const chunkStore = {};
 
