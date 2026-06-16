@@ -1,25 +1,48 @@
 const fs = require("fs/promises");
 const pdfParse = require("pdf-parse");
+const mongoose = require("mongoose");
+const Chunk = require("../models/Chunk.model");
+const Document = require("../models/Document.model");
+
 
 const {
   embedChunks,
   embedText,
-  rankChunks,
+
 } = require("./embedding.service");
 
-// documentId -> [{chunk, embedding}]
-const chunkStore = {};
 
 const CHUNK_SIZE = 800;
 const CHUNK_OVERLAP = 100;
 const TOP_K = 3;
 
-const extractTextFromPDF = async (filePath) => {
-  const buffer = await fs.readFile(filePath);
-  const data = await pdfParse(buffer);
 
-  return data.text;
+// ---------------------------------------------------------------------------
+// PDF parsing
+// ---------------------------------------------------------------------------
+
+const extractTextFromPDF = async (filePath) => {
+  try {
+    const buffer = await fs.readFile(filePath);
+
+    const data = await pdfParse(buffer);
+
+    if (!data.text || data.text.trim().length === 0) {
+      throw new Error("PDF contains no readable text");
+    }
+
+    return data.text;
+
+  } catch (err) {
+    console.error("PDF extraction failed:", err.message);
+    throw err;
+  }
 };
+
+
+// ---------------------------------------------------------------------------
+// Chunking
+// ---------------------------------------------------------------------------
 
 const splitIntoChunks = (text) => {
   const chunks = [];
@@ -27,40 +50,173 @@ const splitIntoChunks = (text) => {
   let start = 0;
 
   while (start < text.length) {
-    chunks.push(text.slice(start, start + CHUNK_SIZE).trim());
+
+    const chunk = text
+      .slice(start, start + CHUNK_SIZE)
+      .trim();
+
+    if (chunk.length > 0) {
+      chunks.push(chunk);
+    }
 
     start += CHUNK_SIZE - CHUNK_OVERLAP;
   }
 
-  return chunks.filter((chunk) => chunk.length > 0);
+  return chunks;
 };
+
+
+
+// ---------------------------------------------------------------------------
+// Indexing document
+// PDF -> chunks -> embeddings -> MongoDB
+// ---------------------------------------------------------------------------
+
+
 
 const indexDocument = async (documentId, filePath) => {
-  const text = await extractTextFromPDF(filePath);
 
-  const chunks = splitIntoChunks(text);
+  try {
 
-  const embeddings = await embedChunks(chunks);
+    await Document.findByIdAndUpdate(
+      documentId,
+      {
+        status:"processing",
+        errorMessage:null
+      }
+    );
 
-  chunkStore[documentId] = chunks.map((chunk, index) => ({
-    chunk,
-    embedding: embeddings[index],
-  }));
 
-  return chunks.length;
-};
+    await Chunk.deleteMany({
+      documentId
+    });
 
-const getRelevantChunks = async (documentId, question) => {
-  const stored = chunkStore[documentId];
 
-  if (!stored || stored.length === 0) {
-    return [];
+    const text =
+      await extractTextFromPDF(filePath);
+
+
+    const chunks =
+      splitIntoChunks(text);
+
+
+    const embeddings =
+      await embedChunks(chunks);
+
+
+
+    const docs =
+      chunks.map((chunk,i)=>({
+
+        documentId,
+
+        chunkIndex:i,
+
+        text:chunk,
+
+        embedding:embeddings[i]
+
+      }));
+
+
+    await Chunk.insertMany(docs);
+
+
+
+    await Document.findByIdAndUpdate(
+      documentId,
+      {
+        status:"ready"
+      }
+    );
+
+
+    return chunks.length;
+
+
+  } catch(err){
+
+
+    await Document.findByIdAndUpdate(
+      documentId,
+      {
+        status:"failed",
+        errorMessage:err.message
+      }
+    );
+
+
+    throw err;
   }
 
-  const queryEmbedding = await embedText(question);
-
-  return rankChunks(stored, queryEmbedding, TOP_K);
 };
+
+
+// ---------------------------------------------------------------------------
+// Retrieval
+// question -> embedding -> similarity search
+// ---------------------------------------------------------------------------
+
+const getRelevantChunks = async (
+  documentId,
+  question
+) => {
+
+  const queryEmbedding =
+    await embedText(question);
+
+
+  const results =
+    await Chunk.aggregate([
+
+      {
+        $vectorSearch: {
+
+          index: "vector_index",
+
+          path: "embedding",
+
+          queryVector: queryEmbedding,
+
+          numCandidates: 100,
+
+          limit: TOP_K,
+
+          filter: {
+            documentId:
+              new mongoose.Types.ObjectId(documentId)
+          }
+
+        }
+      },
+
+
+      {
+        $project: {
+
+          _id:0,
+
+          text:1,
+
+          score:{
+            $meta:"vectorSearchScore"
+          }
+
+        }
+      }
+
+
+    ]);
+
+
+  return results.map(
+    item => item.text
+  );
+
+};
+
+
+// ---------------------------------------------------------------------------
 
 module.exports = {
   indexDocument,

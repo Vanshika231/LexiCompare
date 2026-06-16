@@ -1,5 +1,9 @@
 const Document = require("../models/Document.model");
 const { indexDocument } = require("./rag.service");
+const fs = require("fs");
+const path = require("path");
+const Chunk = require("../models/Chunk.model");
+const Query = require("../models/Query.model");
 const saveDocuments = async (files, userId) => {
   const docs = files.map((file) => ({
     name: file.originalname,
@@ -53,4 +57,72 @@ const getUserDocumentById = async (docId, userId) => {
   return doc;
 };
 
-module.exports = { saveDocuments, getUserDocuments, getUserDocumentById };
+
+
+const retryDocumentProcessing = async(
+ documentId,
+ userId
+)=>{
+
+
+ const doc =
+ await getUserDocumentById(
+   documentId,
+   userId
+ );
+
+
+ await indexDocument(
+   documentId,
+   doc.filePath
+ );
+
+
+ return {
+  message:"Processing started"
+ };
+
+};
+
+
+
+const deleteDocument = async (documentId, userId) => {
+
+  const doc = await getUserDocumentById(
+    documentId,
+    userId
+  );
+
+
+  // delete PDF file from uploads folder
+  if (fs.existsSync(doc.filePath)) {
+    fs.unlinkSync(doc.filePath);
+  }
+
+
+  // delete embeddings
+  await Chunk.deleteMany({
+    documentId: doc._id
+  });
+
+
+  // delete questions history
+  await Query.deleteMany({
+    documentId: doc._id
+  });
+
+
+  // delete document
+  await Document.findByIdAndDelete(
+    doc._id
+  );
+
+
+  return {
+    message: "Document deleted successfully"
+  };
+};
+
+ 
+
+module.exports = { saveDocuments, getUserDocuments, getUserDocumentById, retryDocumentProcessing, deleteDocument };

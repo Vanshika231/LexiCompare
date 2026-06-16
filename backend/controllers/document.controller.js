@@ -3,6 +3,13 @@ const {
   getUserDocuments,
   getUserDocumentById,
 } = require("../services/document.service");
+const {
+ retryDocumentProcessing
+}=require("../services/document.service");
+
+const {
+ deleteDocument
+}=require("../services/document.service");
 
 const uploadDocuments = async (req, res, next) => {
   try {
@@ -35,4 +42,57 @@ const getDocumentById = async (req, res, next) => {
   }
 };
 
-module.exports = { uploadDocuments, getDocuments, getDocumentById };
+
+
+const retryDocument = async(req,res)=>{
+
+ try{
+
+ const result =
+ await retryDocumentProcessing(
+   req.params.id,
+   req.user.id
+ );
+
+
+ res.json(result);
+
+
+ }catch(err){
+
+ res.status(500).json({
+  message:err.message
+ });
+
+ }
+
+};
+
+
+const deleteDocumentController = async(
+ req,
+ res,
+ next
+)=>{
+
+ try{
+
+  const result =
+  await deleteDocument(
+    req.params.id,
+    req.user.id
+  );
+
+
+  res.json(result);
+
+
+ }catch(err){
+   next(err);
+ }
+
+};
+
+
+
+module.exports = { uploadDocuments, getDocuments, getDocumentById, retryDocument, deleteDocumentController };
