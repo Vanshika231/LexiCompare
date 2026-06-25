@@ -16,7 +16,10 @@ if (!process.env.JWT_SECRET) {
 // Middleware
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: [
+      "http://localhost:5173",
+      "https://lexi-compare-904yllo4s-vanshika40315.vercel.app",
+    ],
     credentials: true,
   })
 );
